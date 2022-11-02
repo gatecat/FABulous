@@ -28,6 +28,7 @@ python3 fabric_gen.py -AddList2CSV S_term_DSP_switch_matrix.list S_term_DSP_swit
 
 python3 fabric_gen.py -AddList2CSV RAM_IO_switch_matrix.list RAM_IO_switch_matrix.csv
 python3 fabric_gen.py -AddList2CSV W_IO_switch_matrix.list W_IO_switch_matrix.csv
+python3 fabric_gen.py -AddList2CSV E_IO_switch_matrix.list E_IO_switch_matrix.csv
 
 python3 fabric_gen.py -AddList2CSV RegFile_switch_matrix.list RegFile_switch_matrix.csv
 

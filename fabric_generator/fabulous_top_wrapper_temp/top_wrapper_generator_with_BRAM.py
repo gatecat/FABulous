@@ -84,28 +84,22 @@ def main(argv):
     except IOError:
         print("tb_bitbang_template.vhd not accessible")
     
-    wrapper_top_str = wrapper_top_str.replace("[30:0] io_in", '['+str(NumberOfRows*2+7)+'-1:0] io_in')
-    wrapper_top_str = wrapper_top_str.replace("[30:0] io_out", '['+str(NumberOfRows*2+7)+'-1:0] io_out')
-    wrapper_top_str = wrapper_top_str.replace("[30:0] io_oeb", '['+str(NumberOfRows*2+7)+'-1:0] io_oeb')
+    wrapper_top_str = wrapper_top_str.replace("[30:0] io_in", '['+str(NumberOfRows*4+7)+'-1:0] io_in')
+    wrapper_top_str = wrapper_top_str.replace("[30:0] io_out", '['+str(NumberOfRows*4+7)+'-1:0] io_out')
+    wrapper_top_str = wrapper_top_str.replace("[30:0] io_oeb", '['+str(NumberOfRows*4+7)+'-1:0] io_oeb')
 
-    wrapper_top_str = wrapper_top_str.replace("[32-1:0] I_top", '['+str(NumberOfRows*2)+'-1:0] I_top')
-    wrapper_top_str = wrapper_top_str.replace("[32-1:0] T_top", '['+str(NumberOfRows*2)+'-1:0] T_top')
-    wrapper_top_str = wrapper_top_str.replace("[32-1:0] O_top", '['+str(NumberOfRows*2)+'-1:0] O_top')
+    wrapper_top_str = wrapper_top_str.replace("[32-1:0] I_top", '['+str(NumberOfRows*4)+'-1:0] I_top')
+    wrapper_top_str = wrapper_top_str.replace("[32-1:0] T_top", '['+str(NumberOfRows*4)+'-1:0] T_top')
+    wrapper_top_str = wrapper_top_str.replace("[32-1:0] O_top", '['+str(NumberOfRows*4)+'-1:0] O_top')
     wrapper_top_str = wrapper_top_str.replace("[64-1:0] A_config_C", '['+str(NumberOfRows*4)+'-1:0] A_config_C')
     wrapper_top_str = wrapper_top_str.replace("[64-1:0] B_config_C", '['+str(NumberOfRows*4)+'-1:0] B_config_C')
-
-    wrapper_top_str = wrapper_top_str.replace("[64-1:0] RAM2FAB_D", '['+str(NumberOfRows*4*4)+'-1:0] RAM2FAB_D')
-    wrapper_top_str = wrapper_top_str.replace("[64-1:0] FAB2RAM_D", '['+str(NumberOfRows*4*4)+'-1:0] FAB2RAM_D')
-    wrapper_top_str = wrapper_top_str.replace("[64-1:0] FAB2RAM_A", '['+str(NumberOfRows*4*2)+'-1:0] FAB2RAM_A')
-    wrapper_top_str = wrapper_top_str.replace("[64-1:0] FAB2RAM_C", '['+str(NumberOfRows*4)+'-1:0] FAB2RAM_C')
-    wrapper_top_str = wrapper_top_str.replace("[64-1:0] Config_accessC", '['+str(NumberOfRows*4)+'-1:0] Config_accessC')
     
     wrapper_top_str = wrapper_top_str.replace("localparam NumberOfRows = 16", "localparam NumberOfRows = "+str(NumberOfRows))
     wrapper_top_str = wrapper_top_str.replace("localparam NumberOfCols = 19", "localparam NumberOfCols = "+str(NumberOfCols))
     
-    wrapper_top_str = wrapper_top_str.replace("O_top[23:18] = io_in[30:25]", "O_top["+str(NumberOfRows*2-1)+":18] = io_in["+str(NumberOfRows*2+7-1)+":25]")
-    wrapper_top_str = wrapper_top_str.replace("io_out[30:7] = I_top", "io_out["+str(NumberOfRows*2+7-1)+":7] = I_top")
-    wrapper_top_str = wrapper_top_str.replace("io_oeb[30:7] = T_top", "io_oeb["+str(NumberOfRows*2+7-1)+":7] = T_top")
+    wrapper_top_str = wrapper_top_str.replace("O_top[23:18] = io_in[30:25]", "O_top["+str(NumberOfRows*4-1)+":18] = io_in["+str(NumberOfRows*4+7-1)+":25]")
+    wrapper_top_str = wrapper_top_str.replace("io_out[30:7] = I_top", "io_out["+str(NumberOfRows*4+7-1)+":7] = I_top")
+    wrapper_top_str = wrapper_top_str.replace("io_oeb[30:7] = T_top", "io_oeb["+str(NumberOfRows*4+7-1)+":7] = T_top")
 
     
     #config_str = config_str.replace("parameter NumberOfRows = 16", "parameter NumberOfRows = "+str(NumberOfRows))
@@ -198,17 +192,23 @@ def main(argv):
     T_top_str = ""
     O_top_str = ""
     count = 0
-    for i in range(NumberOfRows*2-1,-1,-2):
+    for i in range(NumberOfRows*4-1,-1,-4):
         count += 1
         I_top_str+='\t.Tile_X0Y'+str(count)+'_A_I_top(I_top['+str(i)+']),\n'
         I_top_str+='\t.Tile_X0Y'+str(count)+'_B_I_top(I_top['+str(i-1)+']),\n'
-        
+        I_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_A_I_top(I_top['+str(i-2)+']),\n'
+        I_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_B_I_top(I_top['+str(i-3)+']),\n'
+
         T_top_str+='\t.Tile_X0Y'+str(count)+'_A_T_top(T_top['+str(i)+']),\n'
         T_top_str+='\t.Tile_X0Y'+str(count)+'_B_T_top(T_top['+str(i-1)+']),\n'
-        
+        T_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_A_T_top(T_top['+str(i-2)+']),\n'
+        T_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_B_T_top(T_top['+str(i-3)+']),\n'
+
         O_top_str+='\t.Tile_X0Y'+str(count)+'_A_O_top(O_top['+str(i)+']),\n'
         O_top_str+='\t.Tile_X0Y'+str(count)+'_B_O_top(O_top['+str(i-1)+']),\n'
-    
+        O_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_A_O_top(O_top['+str(i-2)+']),\n'
+        O_top_str+='\t.Tile_X' + str(NumberOfCols-1) + 'Y'+str(count)+'_B_O_top(O_top['+str(i-3)+']),\n'
+
     A_config_C_str =""
     B_config_C_str =""
     
@@ -227,16 +227,6 @@ def main(argv):
         B_config_C_str+='\t.Tile_X0Y'+str(count)+'_B_config_C_bit1(B_config_C['+str(i-1)+']),\n'
         B_config_C_str+='\t.Tile_X0Y'+str(count)+'_B_config_C_bit2(B_config_C['+str(i-2)+']),\n'
         B_config_C_str+='\t.Tile_X0Y'+str(count)+'_B_config_C_bit3(B_config_C['+str(i-3)+']),\n'
-        
-        FAB2RAM_C_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_C_O0(FAB2RAM_C['+str(i)+']),\n'
-        FAB2RAM_C_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_C_O1(FAB2RAM_C['+str(i-1)+']),\n'
-        FAB2RAM_C_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_C_O2(FAB2RAM_C['+str(i-2)+']),\n'
-        FAB2RAM_C_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_C_O3(FAB2RAM_C['+str(i-3)+']),\n'
-        
-        Config_accessC_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_Config_accessC_bit0(Config_accessC['+str(i)+']),\n'
-        Config_accessC_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_Config_accessC_bit1(Config_accessC['+str(i-1)+']),\n'
-        Config_accessC_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_Config_accessC_bit2(Config_accessC['+str(i-2)+']),\n'
-        Config_accessC_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_Config_accessC_bit3(Config_accessC['+str(i-3)+']),\n'
         
     RAM2FAB_D_str =""
     FAB2RAM_D_str =""
@@ -261,57 +251,6 @@ def main(argv):
         # RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I2(RAM2FAB_D['+str(i-13)+']),\n'
         # RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I3(RAM2FAB_D['+str(i-14)+']),\n'
     
-    # count = 0
-    for i in range(NumberOfRows*4*4-1,-1,-16):
-        count += 1
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D0_I0(RAM2FAB_D['+str(i)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D0_I1(RAM2FAB_D['+str(i-1)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D0_I2(RAM2FAB_D['+str(i-2)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D0_I3(RAM2FAB_D['+str(i-3)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D1_I0(RAM2FAB_D['+str(i-4)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D1_I1(RAM2FAB_D['+str(i-5)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D1_I2(RAM2FAB_D['+str(i-6)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D1_I3(RAM2FAB_D['+str(i-7)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D2_I0(RAM2FAB_D['+str(i-8)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D2_I1(RAM2FAB_D['+str(i-9)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D2_I2(RAM2FAB_D['+str(i-10)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D2_I3(RAM2FAB_D['+str(i-11)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I0(RAM2FAB_D['+str(i-12)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I1(RAM2FAB_D['+str(i-13)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I2(RAM2FAB_D['+str(i-14)+']),\n'
-        RAM2FAB_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_RAM2FAB_D3_I3(RAM2FAB_D['+str(i-15)+']),\n'
-        
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D0_O0(FAB2RAM_D['+str(i)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D0_O1(FAB2RAM_D['+str(i-1)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D0_O2(FAB2RAM_D['+str(i-2)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D0_O3(FAB2RAM_D['+str(i-3)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D1_O0(FAB2RAM_D['+str(i-4)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D1_O1(FAB2RAM_D['+str(i-5)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D1_O2(FAB2RAM_D['+str(i-6)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D1_O3(FAB2RAM_D['+str(i-7)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D2_O0(FAB2RAM_D['+str(i-8)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D2_O1(FAB2RAM_D['+str(i-9)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D2_O2(FAB2RAM_D['+str(i-10)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D2_O3(FAB2RAM_D['+str(i-11)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D3_O0(FAB2RAM_D['+str(i-12)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D3_O1(FAB2RAM_D['+str(i-13)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D3_O2(FAB2RAM_D['+str(i-14)+']),\n'
-        FAB2RAM_D_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_D3_O3(FAB2RAM_D['+str(i-15)+']),\n'
-        
-
-    FAB2RAM_A_str =""
-    count = 0
-    for i in range(NumberOfRows*4*2-1,-1,-8):
-        count += 1
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A0_O0(FAB2RAM_A['+str(i)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A0_O1(FAB2RAM_A['+str(i-1)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A0_O2(FAB2RAM_A['+str(i-2)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A0_O3(FAB2RAM_A['+str(i-3)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A1_O0(FAB2RAM_A['+str(i-4)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A1_O1(FAB2RAM_A['+str(i-5)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A1_O2(FAB2RAM_A['+str(i-6)+']),\n'
-        FAB2RAM_A_str+='\t.Tile_X'+str(NumberOfCols-1)+'Y'+str(count)+'_FAB2RAM_A1_O3(FAB2RAM_A['+str(i-7)+']),\n'
-        
         
         
     
@@ -321,11 +260,6 @@ def main(argv):
     wrapper_top_str+=A_config_C_str+'\n'
     wrapper_top_str+=B_config_C_str+'\n'
     
-    wrapper_top_str+=RAM2FAB_D_str+'\n'
-    wrapper_top_str+=FAB2RAM_D_str+'\n'
-    wrapper_top_str+=FAB2RAM_A_str+'\n'
-    wrapper_top_str+=FAB2RAM_C_str+'\n'
-    wrapper_top_str+=Config_accessC_str+'\n'
     
     wrapper_top_str+='\t//declarations\n'
     wrapper_top_str+='\t.UserCLK(CLK),\n'
@@ -333,28 +267,7 @@ def main(argv):
     wrapper_top_str+='\t.FrameStrobe(FrameSelect)\n'
     wrapper_top_str+='\t);\n\n'
     
-    BRAM_str =""
-    data_cap = int((NumberOfRows*4*4)/NumberOfBRAMs)
-    addr_cap = int((NumberOfRows*4*2)/NumberOfBRAMs)
-    config_cap = int((NumberOfRows*4)/NumberOfBRAMs)
-    
-    for i in range(NumberOfBRAMs):
-        BRAM_str+='\tBlockRAM_1KB Inst_BlockRAM_'+str(i)+' (\n'
-        BRAM_str+='\t.clk(CLK),\n'
-        BRAM_str+='\t.rd_addr(FAB2RAM_A['+str(addr_cap*i+8-1)+':'+str(addr_cap*i)+']),\n'
-        BRAM_str+='\t.rd_data(RAM2FAB_D['+str(data_cap*i+32-1)+':'+str(data_cap*i)+']),\n'
-        BRAM_str+='\t.wr_addr(FAB2RAM_A['+str(addr_cap*i+16-1)+':'+str(addr_cap*i+8)+']),\n'
-        BRAM_str+='\t.wr_data(FAB2RAM_D['+str(data_cap*i+32-1)+':'+str(data_cap*i)+']),\n'
-        BRAM_str+='\t.C0(FAB2RAM_C['+str(config_cap*i)+']),\n'
-        BRAM_str+='\t.C1(FAB2RAM_C['+str(config_cap*i+1)+']),\n'
-        BRAM_str+='\t.C2(FAB2RAM_C['+str(config_cap*i+2)+']),\n'
-        BRAM_str+='\t.C3(FAB2RAM_C['+str(config_cap*i+3)+']),\n'
-        BRAM_str+='\t.C4(FAB2RAM_C['+str(config_cap*i+4)+']),\n'
-        BRAM_str+='\t.C5(FAB2RAM_C['+str(config_cap*i+5)+'])\n'
-        BRAM_str+='\t);\n\n'
-    
-    wrapper_top_str+=BRAM_str;
-    
+        
     wrapper_top_str+="\tassign FrameData = {32'h12345678,FrameRegister,32'h12345678};\n\n"
     wrapper_top_str+='endmodule\n\n'
 
