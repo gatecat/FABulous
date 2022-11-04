@@ -55,13 +55,6 @@ module eFPGA_top (I_top, T_top, O_top, A_config_C, B_config_C, CLK, SelfWriteStr
 	input wire s_clk;
 	input wire s_data;
 
-	//BlockRAM ports
-	input wire [64-1:0] RAM2FAB_D;
-	output wire [64-1:0] FAB2RAM_D;
-	output wire [64-1:0] FAB2RAM_A;
-	output wire [64-1:0] FAB2RAM_C;
-	output wire [64-1:0] Config_accessC;
-
 	// Signal declarations
 	wire [(NumberOfRows*FrameBitsPerRow)-1:0] FrameRegister;
 	wire [(MaxFramesPerCol*NumberOfCols)-1:0] FrameSelect;
