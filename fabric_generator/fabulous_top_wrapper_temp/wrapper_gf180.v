@@ -48,9 +48,9 @@ module user_project_wrapper(
 	assign user_irq = 3'b0;
 
 	eFPGA_top Inst_eFPGA_top(
-		.I_top(io_out[37:14]),
-		.T_top(io_oeb[37:14]),
-		.O_top(io_in[37:14]),
+		.I_top(io_out[37:18]),
+		.T_top(io_oeb[37:18]),
+		.O_top(io_in[37:18]),
 		.A_config_C(),
 		.B_config_C(),
 		.CLK(io_in[0]),
@@ -66,7 +66,7 @@ module user_project_wrapper(
 	assign io_oeb[5:0] = 6'b001111;
 	assign io_out[3:0] = 4'b0000;
 	// unused currently
-	assign io_oeb[13:6] = 8'b11111111;
-	assign io_out[13:6] = 8'b00000000;
+	assign io_oeb[17:6] = 12'b111111111111;
+	assign io_out[17:6] = 12'b000000000000;
 
 endmodule
