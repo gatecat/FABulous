@@ -48,25 +48,29 @@ module user_project_wrapper(
 	assign user_irq = 3'b0;
 
 	eFPGA_top Inst_eFPGA_top(
-		.I_top(io_out[37:18]),
-		.T_top(io_oeb[37:18]),
-		.O_top(io_in[37:18]),
+		.I_top(io_out[37:14]),
+		.T_top(io_oeb[37:14]),
+		.O_top(io_in[37:14]),
 		.A_config_C(),
 		.B_config_C(),
-		.CLK(io_in[0]),
+		.CLK(io_in[5]),
 		.SelfWriteStrobe(1'b0),
 		.SelfWriteData(32'b0),
-		.Rx(io_in[1]),
-		.ComActive(io_out[4]),
-		.ReceiveLED(io_out[5]),
-		.s_clk(io_in[2]),
-		.s_data(io_in[3])
+		.Rx(io_in[6]),
+		.ComActive(io_out[7]),
+		.ReceiveLED(io_out[8]),
+		.s_clk(io_in[9]),
+		.s_data(io_in[10])
 	);
-	// fixed purpose
-	assign io_oeb[5:0] = 6'b001111;
-	assign io_out[3:0] = 4'b0000;
+	// unused (shared with caravel)
+	assign io_oeb[4:0] = 5'b11111;
+	assign io_out[4:0] = 5'b00000;
+    // fixed purpose
+    assign io_oeb[10:5] = 6'b110011;
+    assign io_out[10:9] = 2'b00;
+    assign io_out[6:5] = 2'b00;
 	// unused currently
-	assign io_oeb[17:6] = 12'b111111111111;
-	assign io_out[17:6] = 12'b000000000000;
+	assign io_oeb[13:11] = 3'b111;
+	assign io_out[13:11] = 3'b000;
 
 endmodule
