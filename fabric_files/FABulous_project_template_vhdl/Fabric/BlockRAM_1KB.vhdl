@@ -231,7 +231,7 @@ end entity;
 --   RAM_DEPTH = 256
 architecture from_verilog of sram_1rw1r_32_256_8_sky130 is
 begin
-  dout0 <= (others => 'Z');
-  dout1 <= (others => 'Z');
+  dout0 <= (others => '0');
+  dout1 <= (others => '0');
 end architecture;
 

@@ -53,28 +53,24 @@ entity MUX16PTv2 is
 end entity; 
 
 architecture from_verilog of MUX16PTv2 is
-  signal SEL : unsigned(3 downto 0); 
+  signal a0 : std_logic_vector(7 downto 0);
+  signal a1 : std_logic_vector(3 downto 0);
+  signal a2 : std_logic_vector(1 downto 0);
+  -- As this MUX primitive is used for the LUT, we need accurate X/U behaviour
+  function f_mux2(a : in std_logic; b : in std_logic; s : in std_logic) return std_logic is
+    variable r : std_logic;
+  begin
+    r := a when s = '0' else
+         b when s = '1' else
+         a when a = b else -- case when S is undefined, but it's don't care because a and b are the same
+         'U';
+    return r;
+  end function;
 begin
-  SEL <= S4 & S3 & S2 & S1;
-  with SEL select
-    O <= IN1 after 1 ps  when X"0",
-        IN2 after 1 ps  when X"1",
-        IN3 after 1 ps  when X"2",
-        IN4 after 1 ps when X"3",
-        IN5 after 1 ps when X"4",
-        IN6 after 1 ps when X"5",
-        IN7 after 1 ps when X"6",
-        IN8 after 1 ps when X"7",
-        IN9 after 1 ps when X"8",
-        IN10 after 1 ps when X"9",
-        IN11 after 1 ps when X"a",
-        IN12 after 1 ps when X"b",
-        IN13 after 1 ps when X"c",
-        IN14 after 1 ps when X"d",
-        IN15 after 1 ps when X"e",
-        IN16 after 1 ps when X"f",
-        '0'  when others;
-
+  a0 <= f_mux2(IN15, IN16, S1) & f_mux2(IN13, IN14, S1) & f_mux2(IN11, IN12, S1) & f_mux2(IN9, IN10, S1) & f_mux2(IN7, IN8, S1) & f_mux2(IN5, IN6, S1) & f_mux2(IN3, IN4, S1) & f_mux2(IN1, IN2, S1);
+  a1 <= f_mux2(a0(6), a0(7), S2) & f_mux2(a0(4), a0(5), S2) & f_mux2(a0(2), a0(3), S2) & f_mux2(a0(0), a0(1), S2);
+  a2 <= f_mux2(a1(2), a1(3), S3) & f_mux2(a1(0), a1(1), S3);
+  O <= f_mux2(a2(0), a2(1), S4) after 1 ps;
 end architecture;
 
 library ieee;
@@ -103,7 +99,7 @@ begin
          IN2 after 1 ps when "01",
          IN3 after 1 ps when "10",
          IN4 after 1 ps when "11",
-         '0' after 1 ps when others ;
+         'U' after 1 ps when others ;
   
 end architecture;
 
@@ -261,7 +257,7 @@ begin
          A1 after 1 ps when "01",
          A2 after 1 ps when "10",
          A3 after 1 ps when "11",
-         '0' after 1 ps when others;
+         'U' after 1 ps when others;
 
 end architecture;
 
@@ -417,7 +413,7 @@ begin
          A1 after 1 ps when "01",
          A2 after 1 ps when "10",
          A3 after 1 ps when "11",
-        '0' after 1 ps when others;
+        'U' after 1 ps when others;
 
 end architecture;
 
@@ -531,7 +527,7 @@ begin
   with SEL select
     X <= A0 after 1 ps when '0',
          A1 after 1 ps when '1',
-        '0' after 1 ps when others;
+        'U' after 1 ps when others;
   
 end architecture;
 
