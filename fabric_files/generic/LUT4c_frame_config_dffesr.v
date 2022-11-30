@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module LUT4c_frame_config (I0, I1, I2, I3, O, Ci, Co, SR, EN, UserCLK, ConfigBits);
+module LUT4c_frame_config (I0, I1, I2, I3, O, Ci, Co, SR, EN, UserCLK, OutputEnable, ConfigBits);
 	parameter NoConfigBits = 19 ; // has to be adjusted manually (we don't use an arithmetic parser for the value)
 	// IMPORTANT: this has to be in a dedicated line
 	input I0; // LUT inputs
@@ -24,6 +24,7 @@ module LUT4c_frame_config (I0, I1, I2, I3, O, Ci, Co, SR, EN, UserCLK, ConfigBit
 	output Co; // carry chain output
 	input SR; // SHARED_RESET
 	input EN; // SHARED_ENABLE
+	input OutputEnable; // EXTERNAL // SHARED_PORT
 	input UserCLK; // EXTERNAL // SHARED_PORT // ## the EXTERNAL keyword will send this sisgnal all the way to top and the //SHARED Allows multiple BELs using the same port (e.g. for exporting a clock to the top)
 	// GLOBAL all primitive pins that are connected to the switch matrix have to go before the GLOBAL label
 	input [NoConfigBits-1 : 0] ConfigBits;
@@ -110,13 +111,16 @@ module LUT4c_frame_config (I0, I1, I2, I3, O, Ci, Co, SR, EN, UserCLK, ConfigBit
 	);
 
 	//assign O = c_out_mux ? LUT_flop : LUT_out;
+	wire O_pre;
 	my_mux2 my_mux2_O(
 	.A0(LUT_out),
 	.A1(LUT_flop),
 	.S(c_out_mux),
-	.X(O)
+	.X(O_pre)
 	);
-	
+
+	fpga_outbuf lut_obuf_i (.I(O_pre), .GOE(OutputEnable), .O(O));
+
 	assign Co = (Ci & I1) | (Ci & I2) | (I1 & I2);// iCE40 like carry chain (as this is supported in Yosys; would normally go for fractured LUT
 
 	always @ (posedge UserCLK) begin

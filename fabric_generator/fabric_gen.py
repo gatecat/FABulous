@@ -33,12 +33,13 @@ import xml.etree.ElementTree as ET
 #Parameters = [ 'ConfigBitMode', 'FrameBitsPerRow' ]
 ConfigBitMode = 'FlipFlopChain'
 FrameBitsPerRow = 32
-MaxFramesPerCol = 20
+MaxFramesPerCol = 36
 Package = 'use work.my_package.all;'
 GenerateDelayInSwitchMatrix = '100'	# time in ps - this is needed for simulation as a fabric configuration can result in loops crashing the simulator
 MultiplexerStyle = 'custom'		# 'custom': using our hard-coded MUX-4 and MUX-16; 'generic': using standard generic RTL code
 SwitchMatrixDebugSignals = True		# generate switch matrix select signals (index) which is useful to verify if bitstream matches bitstream
 SuperTileEnable = True		# enable SuperTile generation
+OneHotMux = True
 
 # TILE field aliases
 direction = 0
@@ -990,138 +991,6 @@ def GenerateConfigMemInit( tile_description, entity, file, GlobalConfigBitsCount
     numpy.savetxt(entity+'.init.csv', tmp, fmt='%s', delimiter=",")
     return initCSV
 
-def GenerateConfigMemVHDL( tile_description, entity, file ):
-    # count total number of configuration bits for tile
-    GlobalConfigBitsCounter = 0
-    for line in tile_description:
-        if (line[0] == 'BEL') or (line[0] == 'MATRIX'):
-            if (GetNoConfigBitsFromFile(line[VHDL_file_position])) != 'NULL':
-                GlobalConfigBitsCounter = GlobalConfigBitsCounter + int(GetNoConfigBitsFromFile(line[VHDL_file_position]))
-
-    # we use a file to describe the exact configuration bits to frame mapping
-    # the following command generates an init file with a simple enumerated default mapping (e.g. 'LUT4AB_ConfigMem.init.csv')
-    # if we run this function again, but have such a file (without the .init), then that mapping will be used
-    MappingFile = GenerateConfigMemInit( tile_description, entity, file, GlobalConfigBitsCounter )
-
-    # test if we have a bitstream mapping file
-    # if not, we will take the default, which was passed on from GenerateConfigMemInit
-    if os.path.exists(entity+'.csv'):
-        print('# found bitstream mapping file '+entity+'.csv'+' for tile '+tile_description[0][0])
-        MappingFile = [i.strip('\n').split(',') for i in open(entity+'.csv')]
-
-    # clean comments empty lines etc. in the mapping file
-    MappingFile = RemoveComments(MappingFile)
-
-    # clean the '_' symbols in the used_bits_mask field (had been introduced to allow for making that a little more readable
-    for line in MappingFile:
-        # TODO does not like white spaces tabs etc
-        # print('DEBUG BEFORE line[used_bits_mask]:',entity ,line[frame_name] ,line[used_bits_mask])
-        line[used_bits_mask] = re.sub('_', '', line[used_bits_mask])
-        # print('DEBUG AFTER line[used_bits_mask]:',entity ,line[frame_name] ,line[used_bits_mask])
-
-    # we should have as many lines as we have frames (=MaxFramesPerCol)
-    if str(len(MappingFile)) != str(MaxFramesPerCol):
-        print('WARNING: the bitstream mapping file has only '+str(len(MappingFile))+' entries but MaxFramesPerCol is '+str(MaxFramesPerCol))
-
-    # we should have as many lines as we have frames (=MaxFramesPerCol)
-    # we also check used_bits_mask (is a vector that is as long as a frame and contains a '1' for a bit used and a '0' if not used (padded)
-    UsedBitsCounter = 0
-    for line in MappingFile:
-        if line[used_bits_mask].count('1') > FrameBitsPerRow:
-            raise ValueError('bitstream mapping file '+entity+'.csv has to many 1-elements in bitmask for frame : '+line[frame_name])
-        if (line[used_bits_mask].count('1') + line[used_bits_mask].count('0')) != FrameBitsPerRow:
-            # print('DEBUG LINE: ', line)
-            raise ValueError('bitstream mapping file '+entity+'.csv has a too long or short bitmask for frame : '+line[frame_name])
-        # we also count the used bits over all frames
-        UsedBitsCounter += line[used_bits_mask].count('1')
-    if UsedBitsCounter != GlobalConfigBitsCounter:
-        raise ValueError('bitstream mapping file '+entity+'.csv has a bitmask missmatch; bitmask has in total '+str(UsedBitsCounter)+' 1-values for '+str(GlobalConfigBitsCounter)+' bits')
-
-    # write entity
-    # write entity
-    # write entity
-    GenerateVHDL_Header(file, entity, package=Package, NoConfigBits=str(GlobalConfigBitsCounter), MaxFramesPerCol=str(MaxFramesPerCol), FrameBitsPerRow=str(FrameBitsPerRow))
-
-    # the port definitions are generic
-    print('\t\t FrameData:     in  STD_LOGIC_VECTOR( FrameBitsPerRow -1 downto 0 );', file=file)
-    print('\t\t FrameStrobe:   in  STD_LOGIC_VECTOR( MaxFramesPerCol -1 downto 0 );', file=file)
-    print('\t\t ConfigBits :   out STD_LOGIC_VECTOR( NoConfigBits -1 downto 0 )', file=file)
-    print('\t\t );', file=file)
-    print('end entity;\n', file=file)
-
-    # declare architecture
-    print('architecture Behavioral of '+str(entity)+' is\n', file=file)
-
-
-    # one_line('frame_name')('frame_index')('bits_used_in_frame')('used_bits_mask')('ConfigBits_ranges')
-
-    # frame signal declaration ONLY for the bits actually used
-    UsedFrames = []                # keeps track about the frames that are actually used
-    AllConfigBitsOrder = []        # stores a list of ConfigBits indices in exactly the order defined in the rage statements in the frames
-    for line in MappingFile:
-        bits_used_in_frame = line[used_bits_mask].count('1')
-        if bits_used_in_frame > 0:
-            print('signal '+line[frame_name]+' \t:\t STD_LOGIC_VECTOR( '+str(bits_used_in_frame)+' -1 downto 0);', file=file)
-            UsedFrames.append(line[frame_index])
-
-        # The actual ConfigBits are given as address ranges starting at position ConfigBits_ranges
-        ConfigBitsOrder = []
-        for RangeItem in line[ConfigBits_ranges:]:
-            if ':' in RangeItem:        # we have a range
-                left, right = re.split(':',RangeItem)
-                left = int(left)
-                right = int(right)
-                if left < right:
-                    step = 1
-                else:
-                    step = -1
-                right += step # this makes the python range inclusive, otherwise the last item (which is actually right) would be missing
-                for k in range(left,right,step):
-                    if k in ConfigBitsOrder:
-                        raise ValueError('Configuration bit index '+str(k)+' already allocated in ', entity, line[frame_name])
-                    else:
-                        ConfigBitsOrder.append(int(k))
-            elif RangeItem.isdigit():
-                if int(RangeItem) in ConfigBitsOrder:
-                    raise ValueError('Configuration bit index '+str(RangeItem)+' already allocated in ', entity, line[frame_name])
-                else:
-                    ConfigBitsOrder.append(int(RangeItem))
-            else:
-                # raise ValueError('Range '+str(RangeItem)+' cannot be resolved for frame : '+line[frame_name])
-                print('Range '+str(RangeItem)+' cannot be resolved for frame : '+line[frame_name])
-                print('DEBUG:',line)
-        if len(ConfigBitsOrder) != bits_used_in_frame:
-            raise ValueError('ConfigBitsOrder definition misssmatch: number of 1s in mask do not match ConfigBits_ranges for frame : '+line[frame_name])
-        AllConfigBitsOrder += ConfigBitsOrder
-
-    # begin architecture body
-    print('\nbegin\n' , file=file)
-
-    # instantiate latches for only the used frame bits
-    print('-- instantiate frame latches' , file=file)
-    AllConfigBitsCounter = 0
-    for frame in UsedFrames:
-        used_bits = MappingFile[int(frame)][int(used_bits_mask)]
-        # print('DEBUG: ',entity, used_bits,' : ',AllConfigBitsOrder)
-        for k in range(FrameBitsPerRow):
-            # print('DEBUG: ',entity, used_bits,' : ',k, used_bits[k],'AllConfigBitsCounter',AllConfigBitsCounter, str(AllConfigBitsOrder[AllConfigBitsCounter]))
-            if used_bits[k] == '1':
-                print('Inst_'+MappingFile[int(frame)][int(frame_name)]+'_bit'+str(FrameBitsPerRow-1-k)+'  : LHQD1'          , file=file)
-                print('Port Map ('          , file=file)
-                # The next one is a little tricky:
-                # k iterates over the bit_mask left to right from k=0..(FrameBitsPerRow-1) (k=0 is the most left (=first) character
-                # But that character represents the MSB inside the frame, which iterates FrameBitsPerRow-1..0
-                # bit_mask[0],                    bit_mask[1],                    bit_mask[2], ...
-                # FrameData[FrameBitsPerRow-1-0], FrameData[FrameBitsPerRow-1-1], FrameData[FrameBitsPerRow-1-2],
-                print('\t D \t=>\t FrameData('+str(FrameBitsPerRow-1-k)+'), '      , file=file)
-                print('\t E \t=>\t FrameStrobe('+str(frame)+'), '      , file=file)
-                print('\t Q \t=>\t ConfigBits ('+str(AllConfigBitsOrder[AllConfigBitsCounter])+') ); \n '      , file=file)
-                AllConfigBitsCounter += 1
-
-    print('\nend architecture;\n' , file=file)
-
-    return
-
 def PrintCSV_FileInfo( CSV_FileName ):
     CSVFile = [i.strip('\n').split(',') for i in open(CSV_FileName)]
     print('Tile: ', str(CSVFile[0][0]), '\n')
@@ -1187,7 +1056,7 @@ def GenTileSwitchMatrixVHDL( tile, CSV_FileName, file ):
                 mux_size += 1
         mux_size_list.append(mux_size)
         if mux_size >= 2:
-            GlobalConfigBitsCounter = GlobalConfigBitsCounter + int(math.ceil(math.log2(mux_size)))
+            GlobalConfigBitsCounter = GlobalConfigBitsCounter + mux_size
     print('-- NumberOfConfigBits:'+str(GlobalConfigBitsCounter), file=file)
     # VHDL header
     entity = tile+'_switch_matrix'
@@ -1235,7 +1104,7 @@ def GenTileSwitchMatrixVHDL( tile, CSV_FileName, file ):
                 if port != '0':
                     mux_size += 1
             if mux_size >= 2:
-                print('signal DEBUG_select_'+str(line[0])+'\t: STD_LOGIC_VECTOR ('+str(int(math.ceil(math.log2(mux_size))))+' -1 downto 0);' , file=file)
+                print('signal DEBUG_select_'+str(line[0])+'\t: STD_LOGIC_VECTOR ('+str(mux_size)+' -1 downto 0);' , file=file)
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
 
@@ -1379,7 +1248,7 @@ def GenTileSwitchMatrixVHDL( tile, CSV_FileName, file ):
                         print(' & ',end='', file=file)
             # int(math.ceil(math.log2(inputs_so_far))) tells us how many configuration bits a multiplexer takes
             old_ConfigBitstreamPosition = ConfigBitstreamPosition
-            ConfigBitstreamPosition = ConfigBitstreamPosition +    int(math.ceil(math.log2(inputs_so_far)))
+            ConfigBitstreamPosition = ConfigBitstreamPosition + inputs_so_far
 
             # we have full custom MUX-4 and MUX-16 for which we have to generate code like:
 # VHDL example custom MUX4
@@ -1435,7 +1304,7 @@ def GenTileSwitchMatrixVHDL( tile, CSV_FileName, file ):
                     mux_size += 1
             if mux_size >= 2:
                 old_ConfigBitstreamPosition = ConfigBitstreamPosition
-                ConfigBitstreamPosition = ConfigBitstreamPosition +    int(math.ceil(math.log2(mux_size)))
+                ConfigBitstreamPosition = ConfigBitstreamPosition + mux_size
                 print('DEBUG_select_'+line[0]+'\t<= ConfigBits('+str(ConfigBitstreamPosition-1)+' downto '+str(old_ConfigBitstreamPosition)+');', file=file)
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
@@ -1955,7 +1824,7 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
                 mux_size += 1
         mux_size_list.append(mux_size)
         if mux_size >= 2:
-            GlobalConfigBitsCounter = GlobalConfigBitsCounter + int(math.ceil(math.log2(mux_size)))
+            GlobalConfigBitsCounter = GlobalConfigBitsCounter + int(mux_size)
     print('//NumberOfConfigBits:'+str(GlobalConfigBitsCounter), file=file)
     # Verilog header
     module = tile+'_switch_matrix'
@@ -1973,18 +1842,20 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
         ports.append(line[0])
     module_header_ports = ", ".join(ports)
 
+    module_header_ports += ', OutputEnable'
+
     if GlobalConfigBitsCounter > 0:
         if ConfigBitMode == 'FlipFlopChain':
             module_header_ports += ', MODE, CONFin, CONFout, CLK'
         elif ConfigBitMode == 'frame_based':
-            module_header_ports += ', ConfigBits, ConfigBits_N'
+            module_header_ports += ', FrameData, FrameStrobe'
     else:
         module_header_ports += ''
 
     if (ConfigBitMode == 'FlipFlopChain'):
         GenerateVerilog_Header(module_header_ports, file, module, package=Package, NoConfigBits=str(GlobalConfigBitsCounter))
     else:
-                GenerateVerilog_Header(module_header_ports, file, module, package='', NoConfigBits=str(GlobalConfigBitsCounter))
+        GenerateVerilog_Header(module_header_ports, file, module, package='', NoConfigBits=str(GlobalConfigBitsCounter))
 
     # input ports
     print('\t // switch matrix inputs', file=file)
@@ -2000,10 +1871,11 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
     for line in CSVFile[1:]:
         print('\toutput '+line[0]+';', file=file)
     # this is a shared text block finishes the header and adds configuration port
+    print(f'\tinput OutputEnable;', file=file)
     if GlobalConfigBitsCounter > 0:
-        GenerateVerilog_PortsFooter(file, module, ConfigPort=True)
-    else:
-        GenerateVerilog_PortsFooter(file, module, ConfigPort=False)
+        SwitchMatrixRows = ((GlobalConfigBitsCounter+FrameBitsPerRow-1)//FrameBitsPerRow)
+        print(f'\tinput [{FrameBitsPerRow-1}:0] FrameData;', file=file)
+        print(f'\tinput [{SwitchMatrixRows-1}:0] FrameStrobe;', file=file)
 
     # parameter declaration
     # we may use the following in the switch matrix for providing '0' and '1' to a mux input:
@@ -2014,6 +1886,15 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
     print('\tparameter VDD0 = 1\'b1;', file=file)
     print('\tparameter VDD = 1\'b1;', file=file)
     print('\t', file=file)
+    if GlobalConfigBitsCounter > 0:
+        # word/bitline buffers
+        print(f'\twire [{FrameBitsPerRow-1}:0] bitline_p;', file=file) 
+        print(f'\twire [{FrameBitsPerRow-1}:0] bitline_n;', file=file) 
+        print(f'\twire [{SwitchMatrixRows-1}:0] wordline;', file=file)
+        print(f'\tbitline_bufp blpbuf_i[{FrameBitsPerRow-1}:0] (.I(FrameData), .O(bitline_p));', file=file)
+        print(f'\tbitline_bufn blnbuf_i[{FrameBitsPerRow-1}:0] (.I(FrameData), .O(bitline_n));', file=file)
+        print(f'\twordline_buf wlbuf_i[{SwitchMatrixRows-1}:0] (.I(FrameStrobe), .O(wordline));', file=file)
+        print('\t', file=file)
 
     # signal declaration
     for k in range(1,len(CSVFile),1):
@@ -2030,88 +1911,9 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
                 if port != '0':
                     mux_size += 1
             if mux_size >= 2:
-                print('\twire ['+str(int(math.ceil(math.log2(mux_size))))+'-1:0] '+'DEBUG_select_'+str(line[0])+';', file=file)
+                print('\twire ['+str(mux_size)+'-1:0] '+'DEBUG_select_'+str(line[0])+';', file=file)
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
-
-#    print('debug', file=file)
-#
-#    mux_size_list = []
-#    ConfigBitsCounter = 0
-#    for line in CSVFile[1:]:
-#        # we first count the number of multiplexer inputs
-#        mux_size=0
-#        for port in line[1:]:
-#            # print('debug: ',port)
-#            if port != '0':
-#                mux_size += 1
-#        mux_size_list.append(mux_size)
-#        if mux_size >= 2:
-#            print('signal \t ',line[0]+'_input','\t:\t std_logic_vector(',str(mux_size),'- 1 downto 0 );', file=file)
-#            # "mux_size" tells us the number of mux inputs and "int(math.ceil(math.log2(mux_size)))" the number of configuration bits
-#            # we count all bits needed to declare a corresponding shift register
-#            ConfigBitsCounter = ConfigBitsCounter + int(math.ceil(math.log2(mux_size)))
-    print('\n// The configuration bits (if any) are just a long shift register', file=file)
-    print('\n// This shift register is padded to an even number of flops/latches', file=file)
-    # we are only generate configuration bits, if we really need configurations bits
-    # for example in terminating switch matrices at the fabric borders, we may just change direction without any switching
-    if GlobalConfigBitsCounter > 0:
-        if ConfigBitMode == 'ff_chain':
-            print('\twire ['+str(GlobalConfigBitsCounter)+'-1:0]'+' ConfigBits;', file=file)
-        elif ConfigBitMode == 'FlipFlopChain':
-            # print('DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG ConfigBitMode == FlipFlopChain')
-            # we pad to an even number of bits: (int(math.ceil(ConfigBitCounter/2.0))*2)
-            print('\twire ['+str(int(math.ceil(GlobalConfigBitsCounter/2.0))*2)+'-1:0]'+' ConfigBits;', file=file)
-            print('\twire ['+str(int(math.ceil(GlobalConfigBitsCounter/2.0))*2)+'-1:0]'+' ConfigBitsInput;', file=file)
-
-    # the configuration bits shift register
-    # again, we add this only if needed
-    if GlobalConfigBitsCounter > 0:
-        if ConfigBitMode == 'ff_chain':
-            print('// the configuration bits shift register' , file=file)
-            print('\t'+'always @ (posedge CLK)', file=file)
-            print('\t'+'begin', file=file)
-            print('\t'+'\t'+'if (MODE=1b\'1) begin    //configuration mode' , file=file)
-            print('\t'+'\t'+'\t'+'ConfigBits <= {CONFin,ConfigBits['+str(GlobalConfigBitsCounter)+'-1:1]};' , file=file)
-            print('\t'+'\t'+'end' , file=file)
-            print('\t'+'end', file=file)
-            print('', file=file)
-            print('\tassign CONFout = ConfigBits['+str(GlobalConfigBitsCounter)+'-1];', file=file)
-            print('\n', file=file)
-
-# L:for k in 0 to 196 generate
-        # inst_LHQD1a : LHQD1
-        # Port Map(
-        # D    => ConfigBitsInput(k*2),
-        # E    => CLK,
-        # Q    => ConfigBits(k*2) ) ;
-
-        # inst_LHQD1b : LHQD1
-                # Port Map(
-                # D    => ConfigBitsInput((k*2)+1),
-                # E    => MODE,
-                # Q    => ConfigBits((k*2)+1) );
-# end generate;
-        elif ConfigBitMode == 'FlipFlopChain':
-            print('\tgenvar k;\n', file=file)
-            # print('DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG ConfigBitMode == FlipFlopChain')
-            print('\tassign ConfigBitsInput = {ConfigBits['+str(int(math.ceil(GlobalConfigBitsCounter/2.0))*2)+'-1-1:0],CONFin};\n', file=file)
-            print('\t// for k in 0 to Conf/2 generate', file=file)
-            print('\tfor (k=0; k<'+str(int(math.ceil(GlobalConfigBitsCounter/2.0))-1)+'; k=k+1) begin: L', file=file)
-            print('\t\t'+'LHQD1 inst_LHQD1a(', file=file)
-            print('\t\t'+'.D(ConfigBitsInput[k*2]),', file=file)
-            print('\t\t'+'.E(CLK),', file=file)
-            print('\t\t'+'.Q(ConfigBits[k*2])', file=file)
-            print('\t\t);', file=file)
-            print('', file=file)
-            print('\t\t'+'LHQD1 inst_LHQD1b(', file=file)
-            print('\t\t'+'.D(ConfigBitsInput[(k*2)+1]),', file=file)
-            print('\t\t'+'.E(MODE),', file=file)
-            print('\t\t'+'.Q(ConfigBits[(k*2)+1])', file=file)
-            print('\t\t);', file=file)
-            print('\tend\n', file=file)
-            print('\tassign CONFout = ConfigBits['+str(int(math.ceil(GlobalConfigBitsCounter/2.0))*2)+'-1];', file=file)
-            print('\n', file=file)
 
     # the switch matrix implementation
     # we use the following variable to count the configuration bits of a long shift register which actually holds the switch matrix configuration
@@ -2148,6 +1950,7 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
                     raise ValueError('wrong symbol in CSV file (must be 0, 1, H, or L) when executing function GenTileSwitchMatrixVerilog')
         # this is the case for a configurable switch matrix multiplexer
         if mux_size >= 2:
+            print(f'\twire {line[0]}_mux_o;', file=file)
             if int(GenerateDelayInSwitchMatrix) > 0:
                 #print('\tassign #'+str(GenerateDelayInSwitchMatrix)+' '+line[0]+'_input'+' = {', end='', file=file)
                 print('\tassign '+line[0]+'_input'+' = {', end='', file=file)
@@ -2171,79 +1974,17 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
                     else:
                         print(',',end='', file=file)
             # int(math.ceil(math.log2(inputs_so_far))) tells us how many configuration bits a multiplexer takes
-            old_ConfigBitstreamPosition = ConfigBitstreamPosition
-            ConfigBitstreamPosition = ConfigBitstreamPosition + int(math.ceil(math.log2(inputs_so_far)))
-
-            # we have full custom MUX-4 and MUX-16 for which we have to generate code like:
-# Verilog example custom MUX4
-# inst_MUX4PTv4_J_l_AB_BEG1 : MUX4PTv4
-    # Port Map(
-    # IN1  => J_l_AB_BEG1_input(0),
-    # IN2  => J_l_AB_BEG1_input(1),
-    # IN3  => J_l_AB_BEG1_input(2),
-    # IN4  => J_l_AB_BEG1_input(3),
-    # S1   => ConfigBits(low_362),
-    # S2   => ConfigBits(low_362 + 1,
-    # O    => J_l_AB_BEG1 );
-    # CUSTOM Multiplexers for switch matrix
-    # CUSTOM Multiplexers for switch matrix
-    # CUSTOM Multiplexers for switch matrix
-
-            num_gnd = 0
-
-            if (MultiplexerStyle == 'custom') and (mux_size > 2 and mux_size <= 4):
-                MuxComponentName = 'cus_mux41_buf'
-                num_gnd = 4-mux_size
-            if (MultiplexerStyle == 'custom') and (mux_size > 8 and mux_size <= 16):
-                MuxComponentName = 'cus_mux161_buf'
-                num_gnd = 16-mux_size
-            if (MultiplexerStyle == 'custom') and (mux_size > 4 and mux_size <= 8):
-                MuxComponentName = 'cus_mux81_buf'
-                num_gnd = 8-mux_size
-            if (MultiplexerStyle == 'custom') and (mux_size == 2):
-                MuxComponentName = 'my_mux2'
-            if (MultiplexerStyle == 'custom') and (mux_size == 4 or mux_size == 16 or mux_size == 8):
-                # cus_mux41
-                print('\t'+MuxComponentName+' inst_'+MuxComponentName+'_'+line[0]+' ('+'\n',end='', file=file)
-                # Port Map(
-                # IN1  => J_l_AB_BEG1_input(0),
-                # IN2  => J_l_AB_BEG1_input(1), ...
-                for k in range(0,mux_size):
-                    print('\t'+'.A'+str(k)+' ('+line[0]+'_input['+str(k)+']),\n',end='', file=file)
-                # S1   => ConfigBits(low_362),
-                # S2   => ConfigBits(low_362 + 1, ...
-                for k in range(0,(math.ceil(math.log2(mux_size)))):
-                    print('\t'+'.S'+str(k)+' (ConfigBits['+str(old_ConfigBitstreamPosition)+'+'+str(k)+']),\n',end='', file=file)
-                    print('\t'+'.S'+str(k)+'N (ConfigBits_N['+str(old_ConfigBitstreamPosition)+'+'+str(k)+']),\n',end='', file=file)
-                print('\t'+'.X ('+line[0]+')\n',end='', file=file)
-                print('\t);\n', file=file)
-            elif (MultiplexerStyle == 'custom') and (mux_size == 2):
-                # inst_MUX4PTv4_J_l_AB_BEG1 : MUX4PTv4
-                print('\t'+MuxComponentName+' inst_'+MuxComponentName+'_'+line[0]+' ('+'\n',end='', file=file)
-                for k in range(0,mux_size):
-                    print('\t'+'.A'+str(k)+' ('+line[0]+'_input['+str(k)+']),\n',end='', file=file)
-                for k in range(0,(math.ceil(math.log2(mux_size)))):
-                    print('\t'+'.S (ConfigBits['+str(old_ConfigBitstreamPosition)+'+'+str(k)+']),\n',end='', file=file)
-                print('\t'+'.X ('+line[0]+')\n',end='', file=file)
-                print('\t);\n', file=file)
-            else:        # generic multiplexer
-                if MultiplexerStyle == 'custom':
-                    print('HINT: creating a MUX-'+str(mux_size)+' for port '+line[0]+' in switch matrix for tile '+CSVFile[0][0])
-
-                    print('\t'+MuxComponentName+' inst_'+MuxComponentName+'_'+line[0]+' ('+'\n',end='', file=file)
-                    for k in range(0,mux_size):
-                        print('\t'+'.A'+str(k)+' ('+line[0]+'_input['+str(k)+']),\n',end='', file=file)
-                    for k in range(num_gnd):
-                        print('\t'+'.A'+str(k+mux_size)+' (GND0),\n',end='', file=file)
-                    for k in range(0,(math.ceil(math.log2(mux_size)))):
-                        print('\t'+'.S'+str(k)+' (ConfigBits['+str(old_ConfigBitstreamPosition)+'+'+str(k)+']),\n',end='', file=file)
-                        print('\t'+'.S'+str(k)+'N (ConfigBits_N['+str(old_ConfigBitstreamPosition)+'+'+str(k)+']),\n',end='', file=file)
-                    print('\t'+'.X ('+line[0]+')\n',end='', file=file)
-                    print('\t);\n', file=file)
-                else:
-                    print('\tassign '+line[0]+' = '+line[0]+'_input[',end='', file=file)
-                    print('ConfigBits['+str(ConfigBitstreamPosition-1)+':'+str(old_ConfigBitstreamPosition)+']];', file=file)
-                    print(' ', file=file)
+            cbit = ConfigBitstreamPosition
+            for i in range(inputs_so_far):
+                bl = cbit % FrameBitsPerRow
+                wl = cbit // FrameBitsPerRow
+                print(f'\tfpga_bitmux {line[0]}_mux{i}_i (', file=file)
+                print(f'\t\t.BLP(bitline_p[{bl}]), .BLN(bitline_n[{bl}]), .WL(wordline[{wl}]),', file=file)
+                print(f'\t\t.I({line[0]}_input[{i}]), .O({line[0]}_mux_o)', file=file)
+                print(f'\t);', file=file)
+                cbit += 1
+            print(f'\tfpga_outbuf {line[0]}_obuf_i (.I({line[0]}_mux_o), .GOE(OutputEnable), .O({line[0]}));', file=file)
+            ConfigBitstreamPosition = ConfigBitstreamPosition + inputs_so_far
 
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
@@ -2258,7 +1999,6 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
             if mux_size >= 2:
                 old_ConfigBitstreamPosition = ConfigBitstreamPosition
                 ConfigBitstreamPosition = ConfigBitstreamPosition +    int(math.ceil(math.log2(mux_size)))
-                print('\tassign DEBUG_select_'+line[0]+' = ConfigBits['+str(ConfigBitstreamPosition-1)+':'+str(old_ConfigBitstreamPosition)+'];', file=file)
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
     ### SwitchMatrixDebugSignals ### SwitchMatrixDebugSignals ###
 
@@ -2269,50 +2009,18 @@ def GenTileSwitchMatrixVerilog( tile, CSV_FileName, file ):
 def GenerateConfigMemVerilog( tile_description, module, file ):
     # count total number of configuration bits for tile
     GlobalConfigBitsCounter = 0
+    SwitchMatrixStart = 0
     for line in tile_description:
         if (line[0] == 'BEL') or (line[0] == 'MATRIX'):
             if (GetNoConfigBitsFromFile(line[VHDL_file_position])) != 'NULL':
+                if line[0] == "MATRIX":
+                    SwitchMatrixStart = GlobalConfigBitsCounter
+                    if (GlobalConfigBitsCounter % FrameBitsPerRow) != 0:
+                        # round up to frame align
+                        GlobalConfigBitsCounter += (32 - (GlobalConfigBitsCounter % FrameBitsPerRow)) 
                 GlobalConfigBitsCounter = GlobalConfigBitsCounter + int(GetNoConfigBitsFromFile(line[VHDL_file_position]))
-
-    # we use a file to describe the exact configuration bits to frame mapping
-    # the following command generates an init file with a simple enumerated default mapping (e.g. 'LUT4AB_ConfigMem.init.csv')
-    # if we run this function again, but have such a file (without the .init), then that mapping will be used
-    MappingFile = GenerateConfigMemInit( tile_description, module, file, GlobalConfigBitsCounter )
-
-    # test if we have a bitstream mapping file
-    # if not, we will take the default, which was passed on from GenerateConfigMemInit
-    if os.path.exists(module+'.csv'):
-        print('# found bitstream mapping file '+module+'.csv'+' for tile '+tile_description[0][0])
-        MappingFile = [i.strip('\n').split(',') for i in open(module+'.csv')]
-
-    # clean comments empty lines etc. in the mapping file
-    MappingFile = RemoveComments(MappingFile)
-
-    # clean the '_' symbols in the used_bits_mask field (had been introduced to allow for making that a little more readable
-    for line in MappingFile:
-        # TODO does not like white spaces tabs etc
-        # print('DEBUG BEFORE line[used_bits_mask]:',module ,line[frame_name] ,line[used_bits_mask])
-        line[used_bits_mask] = re.sub('_', '', line[used_bits_mask])
-        # print('DEBUG AFTER line[used_bits_mask]:',module ,line[frame_name] ,line[used_bits_mask])
-
-    # we should have as many lines as we have frames (=MaxFramesPerCol)
-    if str(len(MappingFile)) != str(MaxFramesPerCol):
-        print('WARNING: the bitstream mapping file has only '+str(len(MappingFile))+' entries but MaxFramesPerCol is '+str(MaxFramesPerCol))
-
-    # we should have as many lines as we have frames (=MaxFramesPerCol)
-    # we also check used_bits_mask (is a vector that is as long as a frame and contains a '1' for a bit used and a '0' if not used (padded)
-    UsedBitsCounter = 0
-    for line in MappingFile:
-        if line[used_bits_mask].count('1') > FrameBitsPerRow:
-            raise ValueError('bitstream mapping file '+module+'.csv has to many 1-elements in bitmask for frame : '+line[frame_name])
-        if (line[used_bits_mask].count('1') + line[used_bits_mask].count('0')) != FrameBitsPerRow:
-            # print('DEBUG LINE: ', line)
-            raise ValueError('bitstream mapping file '+module+'.csv has a too long or short bitmask for frame : '+line[frame_name])
-        # we also count the used bits over all frames
-        UsedBitsCounter += line[used_bits_mask].count('1')
-    if UsedBitsCounter != GlobalConfigBitsCounter:
-        raise ValueError('bitstream mapping file '+module+'.csv has a bitmask missmatch; bitmask has in total '+str(UsedBitsCounter)+' 1-values for '+str(GlobalConfigBitsCounter)+' bits')
-
+    if SwitchMatrixStart == 0:
+        SwitchMatrixStart = GlobalConfigBitsCounter
     # write module
     module_header_ports = 'FrameData, FrameStrobe, ConfigBits, ConfigBits_N'
     CSVFile = ''
@@ -2324,66 +2032,26 @@ def GenerateConfigMemVerilog( tile_description, module, file ):
     print('\toutput [NoConfigBits-1:0] ConfigBits;', file=file)
     print('\toutput [NoConfigBits-1:0] ConfigBits_N;', file=file)
 
-    # one_line('frame_name')('frame_index')('bits_used_in_frame')('used_bits_mask')('ConfigBits_ranges')
-
-    # frame signal declaration ONLY for the bits actually used
-    UsedFrames = []                # keeps track about the frames that are actually used
-    AllConfigBitsOrder = []        # stores a list of ConfigBits indices in exactly the order defined in the rage statements in the frames
-    for line in MappingFile:
-        bits_used_in_frame = line[used_bits_mask].count('1')
-        if bits_used_in_frame > 0:
-            print('\twire ['+str(bits_used_in_frame)+'-1:0] '+line[frame_name]+';', file=file)
-            UsedFrames.append(line[frame_index])
-
-        # The actual ConfigBits are given as address ranges starting at position ConfigBits_ranges
-        ConfigBitsOrder = []
-        for RangeItem in line[ConfigBits_ranges:]:
-            if ':' in RangeItem:        # we have a range
-                left, right = re.split(':',RangeItem)
-                left = int(left)
-                right = int(right)
-                if left < right:
-                    step = 1
-                else:
-                    step = -1
-                right += step # this makes the python range inclusive, otherwise the last item (which is actually right) would be missing
-                for k in range(left,right,step):
-                    if k in ConfigBitsOrder:
-                        raise ValueError('Configuration bit index '+str(k)+' already allocated in ', module, line[frame_name])
-                    else:
-                        ConfigBitsOrder.append(int(k))
-            elif RangeItem.isdigit():
-                if int(RangeItem) in ConfigBitsOrder:
-                    raise ValueError('Configuration bit index '+str(RangeItem)+' already allocated in ', module, line[frame_name])
-                else:
-                    ConfigBitsOrder.append(int(RangeItem))
-            else:
-                # raise ValueError('Range '+str(RangeItem)+' cannot be resolved for frame : '+line[frame_name])
-                print('Range '+str(RangeItem)+' cannot be resolved for frame : '+line[frame_name])
-                print('DEBUG:',line)
-        if len(ConfigBitsOrder) != bits_used_in_frame:
-            raise ValueError('ConfigBitsOrder definition misssmatch: number of 1s in mask do not match ConfigBits_ranges for frame : '+line[frame_name])
-        AllConfigBitsOrder += ConfigBitsOrder
-
     # instantiate latches for only the used frame bits
     print('\n//instantiate frame latches' , file=file)
     AllConfigBitsCounter = 0
-    for frame in UsedFrames:
-        used_bits = MappingFile[int(frame)][int(used_bits_mask)]
+    FrameCount = (SwitchMatrixStart + FrameBitsPerRow) // FrameBitsPerRow
+    for i in range(FrameCount):
         # print('DEBUG: ',module, used_bits,' : ',AllConfigBitsOrder)
         for k in range(FrameBitsPerRow):
             # print('DEBUG: ',module, used_bits,' : ',k, used_bits[k],'AllConfigBitsCounter',AllConfigBitsCounter, str(AllConfigBitsOrder[AllConfigBitsCounter]))
-            if used_bits[k] == '1':
-                print('\tLHQD1 Inst_'+MappingFile[int(frame)][int(frame_name)]+'_bit'+str(FrameBitsPerRow-1-k)+'(', file=file)
+            bit = i * FrameBitsPerRow + k
+            if bit < SwitchMatrixStart:
+                print('\tLHQD1 Inst_'+str(bit)+'(', file=file)
                 # The next one is a little tricky:
                 # k iterates over the bit_mask left to right from k=0..(FrameBitsPerRow-1) (k=0 is the most left (=first) character
                 # But that character represents the MSB inside the frame, which iterates FrameBitsPerRow-1..0
                 # bit_mask[0],                    bit_mask[1],                    bit_mask[2], ...
                 # FrameData[FrameBitsPerRow-1-0], FrameData[FrameBitsPerRow-1-1], FrameData[FrameBitsPerRow-1-2],
-                print('\t.D(FrameData['+str(FrameBitsPerRow-1-k)+']),', file=file)
-                print('\t.E(FrameStrobe['+str(frame)+']),', file=file)
-                print('\t.Q(ConfigBits['+str(AllConfigBitsOrder[AllConfigBitsCounter])+']),', file=file)
-                print('\t.QN(ConfigBits_N['+str(AllConfigBitsOrder[AllConfigBitsCounter])+'])', file=file)
+                print('\t.D(FrameData['+str(k)+']),', file=file)
+                print('\t.E(FrameStrobe['+str(i)+']),', file=file)
+                print('\t.Q(ConfigBits['+str(bit)+']),', file=file)
+                print('\t.QN(ConfigBits_N['+str(bit)+'])', file=file)
                 print('\t);\n', file=file)
                 AllConfigBitsCounter += 1
 
@@ -2467,6 +2135,9 @@ def GenerateTileVerilog( tile_description, module, file ):
         module_header_ports += ', UserCLKo'
     else:
         module_header_ports += ', UserCLK, UserCLKo'
+    if 'OutputEnable' not in SharedExternalPorts:
+        module_header_ports += ', OutputEnable'
+    module_header_ports += ', OutputEnable_O'
     if ConfigBitMode == 'frame_based':
         if GlobalConfigBitsCounter > 0:
             #module_header_ports += ', FrameData, FrameStrobe'
@@ -2560,6 +2231,9 @@ def GenerateTileVerilog( tile_description, module, file ):
     else:
         print('\tinput UserCLK;', file=file)
         print('\toutput UserCLKo;', file=file)
+    if 'OutputEnable' not in SharedExternalPorts:
+        print('\tinput OutputEnable;', file=file)
+        print('\toutput OutputEnable_O;', file=file)
     # the rest is a shared text block
     if ConfigBitMode == 'frame_based':
         if GlobalConfigBitsCounter > 0:
@@ -2694,6 +2368,9 @@ def GenerateTileVerilog( tile_description, module, file ):
                 #print('\tend\n', file=file)
 
     print('\tclk_buf inst_clk_buf(.A(UserCLK), .X(UserCLKo));', file=file)
+    print('\tclk_buf inst_oe_pass_buf(.A(OutputEnable), .X(OutputEnable_O));', file=file)
+    print('\toe_drv_buf inst_oe_drv_buf(.A(OutputEnable), .X(OutputEnable_buf));', file=file)
+
     # top configuration data daisy chaining
     if ConfigBitMode == 'FlipFlopChain':
         print('// top configuration data daisy chaining', file=file)
@@ -2754,7 +2431,10 @@ def GenerateTileVerilog( tile_description, module, file ):
                     substitutions = {" ": "", "\t": ""}
                     port=(replace(port, substitutions))
                     if re.search('SHARED_PORT', item):
-                        print('\t.'+port+'('+port+'),', file=file)
+                        if port == 'OutputEnable':
+                            print('\t.'+port+'(OutputEnable_buf),', file=file)
+                        else:
+                            print('\t.'+port+'('+port+'),', file=file)
                     else:  # if not SHARED_PORT then add BEL_prefix_string to signal name
                         print('\t.'+port+'('+BEL_prefix_string+port+'),', file=file)
 
@@ -2823,14 +2503,7 @@ def GenerateTileVerilog( tile_description, module, file ):
                 print('\t.'+(BEL_Inputs+BEL_Outputs)[k]+'(',end='', file=file)
                 # note that the BEL outputs (e.g., from the slice component) are the switch matrix inputs
                 print((Inputs+All_BEL_Outputs+AllJumpWireList+TopOutputs+All_BEL_Inputs+AllJumpWireList)[k].replace('(','[').replace(')',']')+')', end='', file=file)
-                if NuberOfSwitchMatricesWithConfigPort > 0:
-                    print(',', file=file)
-                else:
-                    # stupid VHDL does not allow us to have a ',' for the last port connection, so we need the following for NuberOfSwitchMatricesWithConfigPort==0
-                    if k < ((len(BEL_Inputs+BEL_Outputs)) - 1):
-                        print(',', file=file)
-                    else:
-                        print('', file=file)
+                print(',', file=file)
             if NuberOfSwitchMatricesWithConfigPort > 0:
                 if ConfigBitMode == 'FlipFlopChain':
                     GenerateVerilog_Conf_Instantiation(file=file, counter=BEL_counter, close=False)
@@ -2842,10 +2515,15 @@ def GenerateTileVerilog( tile_description, module, file ):
                 if ConfigBitMode == 'frame_based':
                     BEL_ConfigBits = GetNoConfigBitsFromFile(line[VHDL_file_position])
                     if BEL_ConfigBits != 'NULL':
+                        if BEL_ConfigBitsCounter % FrameBitsPerRow != 0:
+                            BEL_ConfigBitsCounter += 32 - (BEL_ConfigBitsCounter % FrameBitsPerRow) # row align
+                        start_row = BEL_ConfigBitsCounter // FrameBitsPerRow
+                        end_row = start_row + (int(BEL_ConfigBits) + (FrameBitsPerRow - 1)) // FrameBitsPerRow
                     # print('DEBUG:',BEL_ConfigBits)
-                        print('\t.ConfigBits(ConfigBits['+str(BEL_ConfigBitsCounter + int(BEL_ConfigBits))+'-1:'+str(BEL_ConfigBitsCounter)+']),', file=file)
-                        print('\t.ConfigBits_N(ConfigBits_N['+str(BEL_ConfigBitsCounter + int(BEL_ConfigBits))+'-1:'+str(BEL_ConfigBitsCounter)+'])', file=file)
+                        print('\t.FrameData(FrameData),', file=file)
+                        print(f'\t.FrameStrobe(FrameStrobe[{end_row-1}:{start_row}]),', file=file)
                         BEL_ConfigBitsCounter = BEL_ConfigBitsCounter + int(BEL_ConfigBits)
+            print('\t.OutputEnable(OutputEnable_buf)', file=file)
             print('\t);', file=file)
     print('\n'+'endmodule', file=file)
     return
@@ -3334,7 +3012,7 @@ def GenerateFabricVerilog( FabricFile, file, module = 'eFPGA' ):
                             # we are maintaining the here used Tile_XxYy prefix as a sanity check
                             # ExternalPorts = ExternalPorts + 'Tile_X'+str(x)+'Y'+str(y)+'_'+str(PortName)
                             ExternalPorts.append('Tile_X'+str(x)+'Y'+str(y)+'_'+PortName)
-    
+    module_header_ports_list.append("OutputEnable")
     module_header_ports = ', '.join(module_header_ports_list)
     if ConfigBitMode == 'frame_based':
         module_header_ports += ', FrameData, FrameStrobe'
@@ -3343,6 +3021,7 @@ def GenerateFabricVerilog( FabricFile, file, module = 'eFPGA' ):
             print(line_print, file=file)
         print('\tinput [(FrameBitsPerRow*'+str(y_tiles)+')-1:0] FrameData;   // CONFIG_PORT this is a keyword needed to connect the tile to the bitstream frame register', file=file)
         print('\tinput [(MaxFramesPerCol*'+str(x_tiles)+')-1:0] FrameStrobe;   // CONFIG_PORT this is a keyword needed to connect the tile to the bitstream frame register ', file=file)
+        print('\tinput OutputEnable;', file=file)
         GenerateVerilog_PortsFooter(file, module, ConfigPort=False)
     else:
         GenerateVerilog_Header(module_header_ports, file, module,  MaxFramesPerCol=str(MaxFramesPerCol), FrameBitsPerRow=str(FrameBitsPerRow),module_header_files = module_header_files)
@@ -3356,6 +3035,7 @@ def GenerateFabricVerilog( FabricFile, file, module = 'eFPGA' ):
     for y in range(y_tiles):
         for x in range(x_tiles):
             print('\twire Tile_X'+str(x)+'Y'+str(y)+'_UserCLKo;', file=file)
+            print('\twire Tile_X'+str(x)+'Y'+str(y)+'_OutputEnable_O;', file=file)
 
     print('//configuration signal declarations\n', file=file)
 
@@ -3882,6 +3562,7 @@ def GenerateFabricVerilog( FabricFile, file, module = 'eFPGA' ):
                 # Check if this tile uses IO-pins that have to be connected to the top-level module
                 CurrentTileExternalPorts = GetComponentPortsFromFile(fabric[y][x]+'_tile.vhdl', port='external')
                 CLOCK_Tile = False
+                OE_Tile = False
                 if CurrentTileExternalPorts != []:
                     print('\t//tile IO port which gets directly connected to top-level tile module', file=file)
                     for item in CurrentTileExternalPorts:
@@ -3897,22 +3578,33 @@ def GenerateFabricVerilog( FabricFile, file, module = 'eFPGA' ):
                                 print('\t.'+PortName+'(Tile_X'+str(x)+'Y'+str(y+1)+'_UserCLKo),', file=file)
                             else:
                                 print('\t.'+PortName+'(UserCLK),', file=file)
+                            if fabric[y+1][x] != 'NULL':
+                                print('\t.'+PortName+'(Tile_X'+str(x)+'Y'+str(y+1)+'_OutputEnable_O),', file=file)
+                            else:
+                                print('\t.'+PortName+'(OutputEnable),', file=file)
                         else:
                             print('\t.'+PortName+'('+ExternalPorts[ExternalPorts_counter].replace('(','[').replace(')',']').replace(' downto ',':').replace(' ','').replace('\t','')+'),', file=file)
                         ExternalPorts_counter += 1
                 if CLOCK_Tile:
                     print('\t.UserCLKo(Tile_X'+str(x)+'Y'+str(y)+'_UserCLKo),' , file=file)
+                    print('\t.OutputEnable_O(Tile_X'+str(x)+'Y'+str(y)+'_OutputEnable_O),' , file=file)
                 else:
                     if y != y_tiles-1:
                         if fabric[y+1][x] != 'NULL':
                             print('\t.UserCLK(Tile_X'+str(x)+'Y'+str(y+1)+'_UserCLKo),', file=file)
                             print('\t.UserCLKo(Tile_X'+str(x)+'Y'+str(y)+'_UserCLKo),' , file=file)
+                            print('\t.OutputEnable(Tile_X'+str(x)+'Y'+str(y+1)+'_OutputEnable_O),', file=file)
+                            print('\t.OutputEnable_O(Tile_X'+str(x)+'Y'+str(y)+'_OutputEnable_O),' , file=file)
                         else:
                             print('\t.UserCLK(UserCLK),', file=file)
                             print('\t.UserCLKo(Tile_X'+str(x)+'Y'+str(y)+'_UserCLKo),' , file=file)
+                            print('\t.OutputEnable(OutputEnable),', file=file)
+                            print('\t.OutputEnable_O(Tile_X'+str(x)+'Y'+str(y)+'_OutputEnable_O),' , file=file)
                     else:
                         print('\t.UserCLK(UserCLK),', file=file)
                         print('\t.UserCLKo(Tile_X'+str(x)+'Y'+str(y)+'_UserCLKo),' , file=file)
+                        print('\t.OutputEnable(OutputEnable),', file=file)
+                        print('\t.OutputEnable_O(Tile_X'+str(x)+'Y'+str(y)+'_OutputEnable_O),' , file=file)
 
                 if ConfigBitMode == 'FlipFlopChain':
                     GenerateVHDL_Conf_Instantiation(file=file, counter=tile_counter, close=True)
@@ -6124,7 +5816,7 @@ if ('-GenTileConfigMemVHDL'.lower() in processedArguments) or ('-run_all'.lower(
         # I tried various "from StringIO import StringIO" all not working - gave up
         TileFileHandler = open(str(tile)+'_ConfigMem.vhdl','w+')
         TileInformation = GetTileFromFile(FabricFile,str(tile))
-        GenerateConfigMemVHDL(TileInformation,str(tile)+'_ConfigMem',TileFileHandler)
+        # GenerateConfigMemVHDL(TileInformation,str(tile)+'_ConfigMem',TileFileHandler)
         TileFileHandler.close()
 
 if ('-GenTileConfigMemVerilog'.lower() in processedArguments) or ('-run_all'.lower() in processedArguments):

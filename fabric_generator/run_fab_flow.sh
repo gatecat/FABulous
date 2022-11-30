@@ -1,4 +1,5 @@
 #!/bin/bash
+set -ex
 
 # Check we have the correct argument count
 if [ $# -ne 2 ]
@@ -17,23 +18,13 @@ python3 fabric_gen.py -AddList2CSV LUT4AB_switch_matrix.list LUT4AB_switch_matri
 python3 fabric_gen.py -AddList2CSV N_term_single_switch_matrix.list N_term_single_switch_matrix.csv
 python3 fabric_gen.py -AddList2CSV S_term_single_switch_matrix.list S_term_single_switch_matrix.csv
 
-python3 fabric_gen.py -AddList2CSV N_term_RAM_IO_switch_matrix.list N_term_RAM_IO_switch_matrix.csv
-python3 fabric_gen.py -AddList2CSV S_term_RAM_IO_switch_matrix.list S_term_RAM_IO_switch_matrix.csv
+# python3 fabric_gen.py -AddList2CSV N_term_single2_switch_matrix.list N_term_single2_switch_matrix.csv
+# python3 fabric_gen.py -AddList2CSV S_term_single2_switch_matrix.list S_term_single2_switch_matrix.csv
 
-python3 fabric_gen.py -AddList2CSV N_term_single2_switch_matrix.list N_term_single2_switch_matrix.csv
-python3 fabric_gen.py -AddList2CSV S_term_single2_switch_matrix.list S_term_single2_switch_matrix.csv
-
-python3 fabric_gen.py -AddList2CSV N_term_DSP_switch_matrix.list N_term_DSP_switch_matrix.csv
-python3 fabric_gen.py -AddList2CSV S_term_DSP_switch_matrix.list S_term_DSP_switch_matrix.csv
-
-python3 fabric_gen.py -AddList2CSV RAM_IO_switch_matrix.list RAM_IO_switch_matrix.csv
 python3 fabric_gen.py -AddList2CSV W_IO_switch_matrix.list W_IO_switch_matrix.csv
 python3 fabric_gen.py -AddList2CSV E_IO_switch_matrix.list E_IO_switch_matrix.csv
 
-python3 fabric_gen.py -AddList2CSV RegFile_switch_matrix.list RegFile_switch_matrix.csv
-
-python3 fabric_gen.py -AddList2CSV DSP_top_switch_matrix.list DSP_top_switch_matrix.csv
-python3 fabric_gen.py -AddList2CSV DSP_bot_switch_matrix.list DSP_bot_switch_matrix.csv
+# python3 fabric_gen.py -AddList2CSV RegFile_switch_matrix.list RegFile_switch_matrix.csv
 
 #REM STEP 3 : generate the tile switch matrices (RTL)
 python3 fabric_gen.py -GenTileSwitchMatrixVHDL
@@ -50,14 +41,10 @@ python3 fabric_gen.py -GenTileVerilog
 #REM STEP 6 : generate the entire fabric (RTL)
 python3 fabric_gen.py -GenFabricHDL
 python3 fabric_gen.py -GenFabricVerilog
-rm N_term_DSP_ConfigMem.v
-rm N_term_RAM_IO_ConfigMem.v
 rm N_term_single_ConfigMem.v
-rm N_term_single2_ConfigMem.v
-rm S_term_DSP_ConfigMem.v
-rm S_term_RAM_IO_ConfigMem.v
+# rm N_term_single2_ConfigMem.v
 rm S_term_single_ConfigMem.v
-rm S_term_single2_ConfigMem.v
+# rm S_term_single2_ConfigMem.v
 
 #REM STEP 7 : generate verilog top wrapper
 python3 fabulous_top_wrapper_temp/top_wrapper_generator_with_BRAM.py -c $1 -r $2
@@ -66,7 +53,7 @@ python3 fabulous_top_wrapper_temp/top_wrapper_generator_with_BRAM.py -c $1 -r $2
 python3 fabric_gen.py -GenNextpnrModel
 
 #REM STEP 9 : generate the VPR model
-python3 fabric_gen.py -GenVPRModel custom_info.xml
+# python3 fabric_gen.py -GenVPRModel custom_info.xml
 
 #REM STRP 10 : generate the meta data list for FASM -> bitstream
 python3 fabric_gen.py -GenBitstreamSpec npnroutput/meta_data.txt
