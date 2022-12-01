@@ -2350,21 +2350,23 @@ def GenerateTileVerilog( tile_description, module, file ):
                 print(' = '+line[destination_name]+'_i['+str(high_bound_index)+':'+str(line[wires])+'];\n', file=file)
                 
                 for i in range(int(high_bound_index)-int(line[wires])+1):
+                    print(f"assign {line[destination_name]}_i[{i+int(line[wires])}] = {line[destination_name]}[{i+int(line[wires])}];", file=file)
                 #print('\tgenvar '+line[0][0]+'_index;', file=file)
                 #print('\tfor ('+line[0][0]+'_index=0; '+line[0][0]+'_index<='+str(high_bound_index)+'-'+str(line[wires])+'; '+line[0][0]+'_index='+line[0][0]+'_index+1) begin: '+line[0][0]+'_buf', file=file)
-                    print('\tmy_buf '+line[destination_name]+'_inbuf_'+str(i)+' (', file=file)
-                    print('\t.A('+line[destination_name]+'['+str(i+int(line[wires]))+']),', file=file)
-                    print('\t.X('+line[destination_name]+'_i['+str(i+int(line[wires]))+'])', file=file)
-                    print('\t);\n', file=file)
+                    # print('\tmy_buf '+line[destination_name]+'_inbuf_'+str(i)+' (', file=file)
+                    # print('\t.A('+line[destination_name]+'['+str(i+int(line[wires]))+']),', file=file)
+                    # print('\t.X('+line[destination_name]+'_i['+str(i+int(line[wires]))+'])', file=file)
+                    # print('\t);\n', file=file)
                 #print('\tend\n', file=file)
                 
                 for j in range(int(high_bound_index)-int(line[wires])+1):
+                    print(f"assign {line[source_name]}[{j}] = {line[source_name]}_i[{j}];", file=file)
                 #print('\tgenvar '+line[0][0]+'_index;', file=file)
                 #print('\tfor ('+line[0][0]+'_index=0; '+line[0][0]+'_index<='+str(high_bound_index)+'-'+str(line[wires])+'; '+line[0][0]+'_index='+line[0][0]+'_index+1) begin: '+line[0][0]+'_buf', file=file)
-                    print('\tmy_buf '+line[source_name]+'_outbuf_'+str(j)+' (', file=file)
-                    print('\t.A('+line[source_name]+'_i['+str(j)+']),', file=file)
-                    print('\t.X('+line[source_name]+'['+str(j)+'])', file=file)
-                    print('\t);\n', file=file)
+                    # print('\tmy_buf '+line[source_name]+'_outbuf_'+str(j)+' (', file=file)
+                    # print('\t.A('+line[source_name]+'_i['+str(j)+']),', file=file)
+                    # print('\t.X('+line[source_name]+'['+str(j)+'])', file=file)
+                    # print('\t);\n', file=file)
                 #print('\tend\n', file=file)
 
     print('\tclk_buf inst_clk_buf(.A(UserCLK), .X(UserCLKo));', file=file)
