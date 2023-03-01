@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -ex
-DESIGN=shiftreg
+DESIGN=blinky
 BITSTREAM=test_design/${DESIGN}.bin
 VERILOG=../../fabric_generator/verilog_output
 MAX_BITBYTES=16384
