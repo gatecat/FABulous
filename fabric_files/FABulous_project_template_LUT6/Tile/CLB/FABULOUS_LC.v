@@ -156,7 +156,7 @@ module FABULOUS_LC (I0, I1, I2, I3, I4, I5, O, O2, Ci, Co, SR, EN, UserCLK, Conf
 	my_mux2 l5mux_1 (.A0(mux16_o[2]), .A1(mux16_o[3]), .S(LUT_sel[4]), .X(mux32_o[1]));
 
 	// Make a LUT6 out of the LUT5s
-	my_mux2 l6mux_0 (.A0(mux16_o[2]), .A1(mux16_o[3]), .S(LUT_sel[4]), .X(lut6_o));
+	my_mux2 l6mux_0 (.A0(mux32_o[0]), .A1(mux32_o[1]), .S(LUT_sel[5]), .X(lut6_o));
 
 	// Select first output between LUT6 or first LUT5
 	my_mux2 frac_sel (.A0(lut6_o), .A1(mux32_o[0]), .S(c_FRAC), .X(top_o));

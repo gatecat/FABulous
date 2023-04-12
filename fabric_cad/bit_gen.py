@@ -100,8 +100,8 @@ def genBitstream(fasmFile: str, specFile: str, bitstreamFile: str):
 	#bitStr = "00AAFF01\n"
 	#bitStr = hexstring_to_bytes("0xFAB0FAB1")
 	bitStr = bytes.fromhex('00AAFF01000000010000000000000000FAB0FAB1')
-	bit_array = [[b'' for x in range(20)] for y in range(num_columns)]
-	bit_array_check = [['' for x in range(20)] for y in range(num_columns)]
+	bit_array = [[b'' for x in range(MaxFramesPerCol)] for y in range(num_columns)]
+	bit_array_check = [['' for x in range(MaxFramesPerCol)] for y in range(num_columns)]
 
 	#default_hex = ['0','0','0','0','0','0','0','0']
 
@@ -173,7 +173,7 @@ def genBitstream(fasmFile: str, specFile: str, bitstreamFile: str):
 		outStr += curStr + "\n"
 	#print(num_columns)
 	for i in range(num_columns):
-		for j in range(20):
+		for j in range(MaxFramesPerCol):
 		    bin_temp = "{0:b}".format(i).zfill(5)[::-1]
 		    frame_select = ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0']
 		    #bitStr += "X"+str(i)+", frame"+str(j)+"\n"
@@ -181,7 +181,9 @@ def genBitstream(fasmFile: str, specFile: str, bitstreamFile: str):
 		    for k in range(-5,0,1):
 		        frame_select[k] = bin_temp[k]
 		    #frame_select[22+i] = '1'
-		    frame_select[j] = '1'
+		    for k in range(MaxFramesPerCol.bit_length()):
+		    	if ((j+1) >> k) & 0x1:
+		    		frame_select[k] = '1'
 		    #frame_select_temp = hex(int((''.join(frame_select))[::-1],2)).replace("0x","")
 		    frame_select_temp = (''.join(frame_select))[::-1]
 		    #bit_hex_full = default_hex.copy()

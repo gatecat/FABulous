@@ -1834,7 +1834,7 @@ class FabricGenerator:
         for col in range(numberOfColumns):
             self.writer.addInstantiation(compName=f"Frame_Select",
                                          compInsName=f"inst_Frame_Select_{col}",
-                                         portsPairs=[("FrameStrobe_I", "FrameAddressRegister[MaxFramesPerCol-1:0]"),
+                                         portsPairs=[("FrameStrobe_I", f"FrameAddressRegister[{self.fabric.maxFramesPerCol.bit_length()}-1:0]"),
                                                      ("FrameStrobe_O", f"FrameSelect[{col}*MaxFramesPerCol+MaxFramesPerCol-1:{col}*MaxFramesPerCol]"),
                                                      ("FrameSelect", "FrameAddressRegister[FrameBitsPerRow-1:FrameBitsPerRow-FrameSelectWidth]"),
                                                      ("FrameStrobe", "LongFrameStrobe")],

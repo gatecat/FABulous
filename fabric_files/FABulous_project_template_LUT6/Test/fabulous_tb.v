@@ -41,7 +41,7 @@ module fab_tb;
 
     assign T_top_gold = ~oeb_gold;
 
-    localparam MAX_BITBYTES = 16384;
+    localparam MAX_BITBYTES = 32768;
     reg [7:0] bitstream[0:MAX_BITBYTES-1];
 
     always #5000 CLK = (CLK === 1'b0);
